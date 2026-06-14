@@ -61,7 +61,7 @@ let S={
   screen:'loading',tab:'today',prof:null,log:[],week:{},carry:0,
   modal:false,ftxt:'',fres:null,fbusy:false,ferr:'',
   step:0,form:{name:'',age:'',sex:'male',wKg:133,hFt:5,hIn:11,activity:'light'},
-  saved:false,cfreset:false,weights:[],water:0,eatWin:null,
+  saved:false,cfreset:false,weights:[],water:0,eatWin:null,suggestion:null,sugBusy:false,sugErr:'',sugInput:'',
 };
 const set=upd=>{Object.assign(S,upd);render()};
 
@@ -70,6 +70,31 @@ async function aiFood(desc){
   if(!r.ok)throw new Error('FAIL');
   const d=await r.json();
   return JSON.parse((d.content?.[0]?.text||'{}').replace(/```json?|```/g,'').trim());
+}
+
+async function getSuggestion(){
+  if(S.sugBusy)return;
+  const p=S.prof,log=S.log,carry=S.carry;
+  const adj=carry?Math.max(p.cals-carry,800):p.cals;
+  const tot=log.reduce((a,x)=>({kcal:a.kcal+(x.kcal||0),prot:a.prot+(x.prot||0),carb:a.carb+(x.carb||0),fat:a.fat+(x.fat||0)}),{kcal:0,prot:0,carb:0,fat:0});
+  const ctx={
+    remaining:Math.max(adj-tot.kcal,0),
+    protRem:Math.max(p.prot-tot.prot,0),
+    carbRem:Math.max(p.carb-tot.carb,0),
+    fatRem:Math.max(p.fat-tot.fat,0),
+    eaten:log.map(x=>x.name).join(', ')||'Nothing yet',
+    hour:new Date().getHours(),
+    pref:S.sugInput||'',
+  };
+  set({sugBusy:true,sugErr:'',suggestion:null});
+  try{
+    const r=await fetch('/.netlify/functions/analyse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:'suggest',ctx})});
+    if(!r.ok)throw new Error('FAIL');
+    const d=await r.json();
+    set({sugBusy:false,suggestion:JSON.parse((d.content?.[0]?.text||'{}').replace(/```json?|```/g,'').trim())});
+  }catch(e){
+    set({sugBusy:false,sugErr:'Could not generate a suggestion — try again'});
+  }
 }
 
 function exportWeek(){
@@ -180,6 +205,27 @@ ${ewHTML}
 <div class="card"><div style="padding:12px 15px;border-bottom:1px solid #0f172a"><span style="font-weight:700;font-size:15px">Food Log</span>${log.length?`<span style="color:#334155;font-size:13px"> · ${log.length} item${log.length!==1?'s':''}</span>`:''}</div>
 ${log.length===0?`<div style="padding:28px 18px;text-align:center;color:#334155"><div style="font-size:34px;margin-bottom:7px">🍽️</div><div style="font-size:14px">Nothing logged yet</div><div style="font-size:12px;margin-top:4px;color:#1e293b">Tap + to add your first meal</div></div>`:log.map((x,i)=>`<div style="padding:11px 15px;border-bottom:${i<log.length-1?'1px solid #0f172a':'none'};display:flex;align-items:center;gap:11px"><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:500;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e2e8f0">${x.name}</div><div style="font-size:11px;color:#475569">${x.time} · P:${x.prot}g · C:${x.carb}g · F:${x.fat}g</div></div><div style="color:#f8fafc;font-weight:700;font-size:15px;flex-shrink:0">${x.kcal}</div><button class="dlb" data-id="${x.id}" style="background:none;border:none;color:#334155;cursor:pointer;font-size:15px;padding:0;line-height:1;flex-shrink:0">✕</button></div>`).join('')}
 </div>
+<div class="card" style="margin-top:11px"><div style="padding:13px 15px">
+<div style="font-weight:700;font-size:15px;margin-bottom:3px">✨ What should I eat next?</div>
+<div style="color:#475569;font-size:12px;margin-bottom:10px">${Math.max(adj-tot.kcal,0).toLocaleString()} kcal · P:${Math.max(p.prot-tot.prot,0)}g · C:${Math.max(p.carb-tot.carb,0)}g · F:${Math.max(p.fat-tot.fat,0)}g still to go</div>
+<div style="display:flex;gap:8px;margin-bottom:${S.suggestion||S.sugBusy||S.sugErr?'10px':'0'}">
+<input id="suginp" class="inp" value="${S.sugInput||''}" placeholder="In the mood for anything? (optional)" style="flex:1;margin-bottom:0;font-size:13px;padding:10px 13px">
+<button id="sugbtn" style="padding:10px 16px;border-radius:10px;background:${S.sugBusy?'#1e1a3a':'#7c3aed'};border:none;color:${S.sugBusy?'#475569':'#fff'};font-weight:700;cursor:pointer;font-size:13px;flex-shrink:0" ${S.sugBusy?'disabled':''}>${S.sugBusy?'⏳':'Suggest'}</button>
+</div>
+${S.sugErr?`<div style="color:#f87171;font-size:13px;margin-bottom:8px">${S.sugErr}</div>`:''}
+${S.suggestion?`<div style="background:#0f0a1e;border:1px solid #4c1d95;border-radius:12px;padding:13px">
+<div style="color:#f8fafc;font-weight:700;font-size:15px;margin-bottom:7px">${S.suggestion.meal}</div>
+<div style="margin-bottom:8px">
+<span style="background:#22c55e22;color:#22c55e;border-radius:6px;padding:3px 8px;font-size:12px;font-weight:700;margin-right:4px">${S.suggestion.kcal} kcal</span>
+<span style="background:#3b82f622;color:#3b82f6;border-radius:6px;padding:3px 8px;font-size:12px;font-weight:700;margin-right:4px">P:${S.suggestion.prot}g</span>
+<span style="background:#f59e0b22;color:#f59e0b;border-radius:6px;padding:3px 8px;font-size:12px;font-weight:700;margin-right:4px">C:${S.suggestion.carb}g</span>
+<span style="background:#a78bfa22;color:#a78bfa;border-radius:6px;padding:3px 8px;font-size:12px;font-weight:700">F:${S.suggestion.fat}g</span>
+</div>
+${S.suggestion.why?`<div style="color:#94a3b8;font-size:12px;margin-bottom:4px">💡 ${S.suggestion.why}</div>`:''}
+${S.suggestion.how?`<div style="color:#64748b;font-size:12px;margin-bottom:8px">👨‍🍳 ${S.suggestion.how}</div>`:''}
+<button id="sugagain" style="display:block;width:100%;padding:8px;border-radius:8px;background:#1e1a3a;border:1px solid #4c1d95;color:#a78bfa;font-size:12px;font-weight:600;cursor:pointer">Suggest something different →</button>
+</div>`:''}
+</div></div>
 <button id="fab" style="position:fixed;bottom:88px;right:18px;width:56px;height:56px;border-radius:50%;background:#3b82f6;border:none;color:#fff;font-size:28px;cursor:pointer;box-shadow:0 4px 18px rgba(59,130,246,.5);display:flex;align-items:center;justify-content:center">+</button>
 </div>`;
 }
@@ -334,6 +380,9 @@ function bindMain(){
     wts.sort((a,b)=>a.date.localeCompare(b.date));
     DB.set('weights',wts);set({weights:wts});
   });
+  const sugbtn=q('sugbtn');if(sugbtn)sugbtn.addEventListener('click',getSuggestion);
+  const sugagain=q('sugagain');if(sugagain)sugagain.addEventListener('click',getSuggestion);
+  const suginp=q('suginp');if(suginp)suginp.addEventListener('input',e=>{S.sugInput=e.target.value});
   if(S.modal)bindModal();
   if(S.tab==='settings')bindSettings();
 }
