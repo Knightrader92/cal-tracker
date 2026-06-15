@@ -21,20 +21,23 @@ exports.handler = async (event) => {
 
       content = `You are a personal nutritionist for a South Asian man (Pakistani origin, UK-based) with insulin resistance and fatty liver disease, doing weight training 3x/week with a personal trainer.
 
-Current time: ${mt} (${ctx.hour}:00)
+Time: ${mt} (${ctx.hour}:00)
 Remaining budget today: ${ctx.remaining} kcal
 Still needed: Protein ${ctx.protRem}g · Carbs ${ctx.carbRem}g · Fat ${ctx.fatRem}g
-Already eaten today: ${ctx.eaten}${ctx.pref ? `\nHe's in the mood for: "${ctx.pref}"` : ''}
+Already eaten today: ${ctx.eaten}${ctx.pref ? `\nHe's in the mood for: "${ctx.pref}"` : ''}${ctx.prev?.length ? `\n\nDo NOT suggest any of these — already suggested this session:\n${ctx.prev.map((s,i)=>`${i+1}. ${s}`).join('\n')}` : ''}
 
-Suggest ONE specific, practical meal. Rules:
+VARIETY IS ESSENTIAL. Rotate creatively through different protein sources each suggestion:
+Turkish eggs (cilbir), salmon with quinoa, tuna stuffed peppers, turkey mince keema, lean beef kofta, paneer bhurji, cottage cheese with oatcakes, mackerel on rye, egg white omelette, chickpea curry, lentil soup, Greek yoghurt protein bowl, sardines on toast, prawn stir fry, lamb mince with cauliflower rice.
+
+Rules:
 - Must fit within the remaining ${ctx.remaining} kcal
-- If protein remaining >80g, the meal MUST be protein-heavy
-- Prefer South Asian foods he likely enjoys, or simple UK foods
-- Avoid high-GI carbs (white rice, white bread, sugary foods) given insulin resistance
-- Be specific — not just "chicken salad" but "grilled chicken thighs with cucumber raita and a small wholemeal roti"
+- If protein remaining >80g, meal MUST be high protein (aim for 50g+)
+- South Asian or simple UK foods he can realistically make or buy
+- Avoid high-GI carbs (white rice, white bread, sugar) — insulin resistance
+- Be specific with quantities
 
 Return ONLY valid JSON, no markdown or extra text:
-{"meal":"specific meal name","kcal":integer,"prot":integer,"carb":integer,"fat":integer,"why":"one sentence on why this fits his targets right now","how":"one sentence quick prep tip or where to get it"}`;
+{"meal":"specific meal name with quantities","kcal":integer,"prot":integer,"carb":integer,"fat":integer,"why":"one sentence why this fits targets right now","how":"one sentence quick prep tip"}`;
 
     } else {
       content = `Nutrition expert. Return ONLY valid JSON, no markdown or extra text.
@@ -53,6 +56,7 @@ UK/South Asian values: chapati≈120kcal,paratha≈220,roti≈120,rice cup≈210
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
         max_tokens: 400,
+        temperature: 1,
         messages: [{ role: 'user', content }]
       })
     });
