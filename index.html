@@ -61,7 +61,7 @@ let S={
   screen:'loading',tab:'today',prof:null,log:[],week:{},carry:0,
   modal:false,ftxt:'',fres:null,fbusy:false,ferr:'',
   step:0,form:{name:'',age:'',sex:'male',wKg:133,hFt:5,hIn:11,activity:'light'},
-  saved:false,cfreset:false,weights:[],water:0,eatWin:null,suggestion:null,sugBusy:false,sugErr:'',sugInput:'',
+  saved:false,cfreset:false,weights:[],water:0,eatWin:null,  suggestion:null,sugBusy:false,sugErr:'',sugInput:'',prevSuggs:[],
 };
 const set=upd=>{Object.assign(S,upd);render()};
 
@@ -85,13 +85,16 @@ async function getSuggestion(){
     eaten:log.map(x=>x.name).join(', ')||'Nothing yet',
     hour:new Date().getHours(),
     pref:S.sugInput||'',
+    prev:S.prevSuggs||[],
   };
   set({sugBusy:true,sugErr:'',suggestion:null});
   try{
     const r=await fetch('/.netlify/functions/analyse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:'suggest',ctx})});
     if(!r.ok)throw new Error('FAIL');
     const d=await r.json();
-    set({sugBusy:false,suggestion:JSON.parse((d.content?.[0]?.text||'{}').replace(/```json?|```/g,'').trim())});
+    const sug=JSON.parse((d.content?.[0]?.text||'{}').replace(/```json?|```/g,'').trim());
+    const prevSuggs=[...(S.prevSuggs||[]),sug.meal].slice(-5);
+    set({sugBusy:false,suggestion:sug,prevSuggs});
   }catch(e){
     set({sugBusy:false,sugErr:'Could not generate a suggestion — try again'});
   }
@@ -432,13 +435,32 @@ function bindSettings(){
 function init(){
   const p=DB.get('profile');if(!p){set({screen:'setup'});return}
   const today=toKey(),log=DB.get(`log:${today}`)||[];
-  const yest=toKey(new Date(Date.now()-86400000)),yLog=DB.get(`log:${yest}`)||[];
-  let carry=0;if(yLog.length){const yTot=yLog.reduce((s,x)=>s+(x.kcal||0),0);carry=Math.max(-500,Math.min(500,yTot-p.cals))}
+
+  // Daily carry-over — resets clean every Monday
+  const dow=new Date().getDay(); // 0=Sun,1=Mon..6=Sat
+  let carry=0;
+  if(dow!==1){
+    const yest=toKey(new Date(Date.now()-86400000));
+    const dayB4=toKey(new Date(Date.now()-172800000));
+    const yLog=DB.get(`log:${yest}`)||[];
+    if(yLog.length){
+      const yTot=yLog.reduce((s,x)=>s+(x.kcal||0),0);
+      let yAdj=p.cals;
+      const dbLog=DB.get(`log:${dayB4}`)||[];
+      if(dbLog.length){
+        const dbTot=dbLog.reduce((s,x)=>s+(x.kcal||0),0);
+        const dbCarry=Math.max(-500,Math.min(500,dbTot-p.cals));
+        yAdj=Math.max(p.cals-dbCarry,800);
+      }
+      carry=Math.max(-500,Math.min(500,yTot-yAdj));
+    }
+  }
   const week={};last7().forEach(d=>{const l=DB.get(`log:${d}`)||[];week[d]=l.reduce((s,x)=>s+(x.kcal||0),0)});
   const weights=DB.get('weights')||[];
   const water=DB.get(`water:${today}`)||0;
   const eatWin=DB.get(`eatwin:${today}`)||null;
   set({screen:'main',prof:p,log,week,carry,weights,water,eatWin});
+  const _d=toKey();setInterval(()=>{if(toKey()!==_d)location.reload()},60000);
 }
 init();
 </script>
