@@ -9,11 +9,13 @@ exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') return { statusCode: 405, headers: cors, body: 'Method not allowed' };
 
   try {
-    const { food, mode, ctx } = JSON.parse(event.body);
+    const { food, mode, ctx, image } = JSON.parse(event.body);
 
     let content;
+    let temperature = 0.2; // consistent numbers for food logging
 
     if (mode === 'suggest') {
+      temperature = 1; // creative variety for meal ideas
       const mt = ctx.hour < 11 ? 'breakfast'
                : ctx.hour < 15 ? 'lunch'
                : ctx.hour < 18 ? 'afternoon snack'
@@ -39,6 +41,29 @@ Rules:
 Return ONLY valid JSON, no markdown or extra text:
 {"meal":"specific meal name with quantities","kcal":integer,"prot":integer,"carb":integer,"fat":integer,"why":"one sentence why this fits targets right now","how":"one sentence quick prep tip"}`;
 
+    } else if (mode === 'image') {
+      if (!image) {
+        return { statusCode: 400, headers: cors, body: JSON.stringify({ error: 'No image' }) };
+      }
+      content = [
+        { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: image } },
+        { type: 'text', text: `You are a nutrition expert estimating calories from a food photo for a UK-based South Asian man tracking his intake.
+${food ? `His note about this meal: "${food}" — treat this as accurate and let it override what you see in the photo.\n` : ''}
+Steps:
+1. Identify every food and drink visible.
+2. Estimate portion sizes from visual cues — plate size (standard dinner plate is about 27cm), cutlery, hands, packaging.
+3. If a nutrition label or branded packaging is visible, use those values.
+4. For curries and South Asian dishes, assume typical home-cooked oil levels unless it clearly looks like restaurant or takeaway food (then add about 25%).
+5. Sum everything visible.
+
+Reference values: chapati/roti ≈120kcal, naan ≈280, paratha ≈220, cup cooked rice ≈210, bowl of daal ≈180, chicken karahi portion ≈350, biryani plate ≈450, samosa ≈150.
+
+If there is no food in the image, return kcal 0 and name "No food detected".
+
+Return ONLY valid JSON, no markdown or extra text:
+{"name":"short meal name","kcal":integer,"prot":integer,"carb":integer,"fat":integer,"note":"one sentence: what you identified and the portion sizes you assumed"}` }
+      ];
+
     } else {
       content = `Nutrition expert. Return ONLY valid JSON, no markdown or extra text.
 Food: "${food}"
@@ -56,7 +81,7 @@ UK/South Asian values: chapati≈120kcal,paratha≈220,roti≈120,rice cup≈210
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
         max_tokens: 400,
-        temperature: 1,
+        temperature,
         messages: [{ role: 'user', content }]
       })
     });
