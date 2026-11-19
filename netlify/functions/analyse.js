@@ -26,7 +26,11 @@ exports.handler = async (event) => {
 Time: ${mt} (${ctx.hour}:00)
 Remaining budget today: ${ctx.remaining} kcal
 Still needed: Protein ${ctx.protRem}g · Carbs ${ctx.carbRem}g · Fat ${ctx.fatRem}g
-Already eaten today: ${ctx.eaten}${ctx.pref ? `\nHe's in the mood for: "${ctx.pref}"` : ''}${ctx.prev?.length ? `\n\nDo NOT suggest any of these — already suggested this session:\n${ctx.prev.map((s,i)=>`${i+1}. ${s}`).join('\n')}` : ''}
+Already eaten today: ${ctx.eaten}${ctx.pref ? `\nHe's in the mood for: "${ctx.pref}"` : ''}${ctx.ins ? `\n\nInsulin status (estimated from today's food): ${ctx.ins.state}${ctx.ins.until ? ` until about ${ctx.ins.until}` : ''}. Today's biggest spike: ${ctx.ins.peak}.${ctx.ins.highMeals ? ` High-insulin foods today: ${ctx.ins.highMeals}.` : ''}
+Keeping insulin low matters for his insulin resistance and fatty liver:
+- If fat burning is paused, or today already had a High spike, suggest a LOW-insulin meal: protein + non-starchy veg + healthy fat, little or no starch, nothing sweet.
+- Otherwise keep carbs modest and low-GI, always paired with protein and fibre.
+- In "how", mention eating order (veg and protein first, carbs last) or a short walk afterwards when it helps.` : ''}${ctx.prev?.length ? `\n\nDo NOT suggest any of these — already suggested this session:\n${ctx.prev.map((s,i)=>`${i+1}. ${s}`).join('\n')}` : ''}
 
 VARIETY IS ESSENTIAL. Rotate creatively through different protein sources each suggestion:
 Turkish eggs (cilbir), salmon with quinoa, tuna stuffed peppers, turkey mince keema, lean beef kofta, paneer bhurji, cottage cheese with oatcakes, mackerel on rye, egg white omelette, chickpea curry, lentil soup, Greek yoghurt protein bowl, sardines on toast, prawn stir fry, lamb mince with cauliflower rice.
@@ -39,7 +43,7 @@ Rules:
 - Be specific with quantities
 
 Return ONLY valid JSON, no markdown or extra text:
-{"meal":"specific meal name with quantities","kcal":integer,"prot":integer,"carb":integer,"fat":integer,"why":"one sentence why this fits targets right now","how":"one sentence quick prep tip"}`;
+{"meal":"specific meal name with quantities","kcal":integer,"prot":integer,"carb":integer,"fat":integer,"ins":"Low|Medium|High (expected insulin response of this meal)","why":"one sentence why this fits his targets and insulin status right now","how":"one sentence quick prep tip"}`;
 
     } else if (mode === 'image') {
       if (!image) {
@@ -60,14 +64,19 @@ Reference values: chapati/roti ≈120kcal, naan ≈280, paratha ≈220, cup cook
 
 If there is no food in the image, return kcal 0 and name "No food detected".
 
+gi = estimated glycemic index of the whole meal as eaten (0-100). Protein, fat and fibre in the same meal lower it; sugary drinks, white rice, naan and white bread raise it.
+tip = one short practical tip (max 15 words) to soften the blood sugar and insulin spike from THIS food, for someone with insulin resistance — e.g. a 10-15 min walk straight after, eat the protein and veg first, swap naan for one wholemeal roti. If the food is low-carb, say so briefly.
+
 Return ONLY valid JSON, no markdown or extra text:
-{"name":"short meal name","kcal":integer,"prot":integer,"carb":integer,"fat":integer,"note":"one sentence: what you identified and the portion sizes you assumed"}` }
+{"name":"short meal name","kcal":integer,"prot":integer,"carb":integer,"fat":integer,"gi":integer,"note":"one sentence: what you identified and the portion sizes you assumed","tip":"short tip"}` }
       ];
 
     } else {
       content = `Nutrition expert. Return ONLY valid JSON, no markdown or extra text.
 Food: "${food}"
-Return: {"name":"short name","kcal":integer,"prot":integer,"carb":integer,"fat":integer,"note":"accuracy note"}
+Return: {"name":"short name","kcal":integer,"prot":integer,"carb":integer,"fat":integer,"gi":integer,"note":"accuracy note","tip":"short tip"}
+gi = estimated glycemic index of the whole meal as eaten (0-100). Protein, fat and fibre in the same meal lower it; sugary drinks, white rice, naan and white bread raise it.
+tip = one short practical tip (max 15 words) to soften the blood sugar and insulin spike from THIS food, for someone with insulin resistance — e.g. a 10-15 min walk straight after, eat the protein and veg first, swap naan for one wholemeal roti. If the food is low-carb, say so briefly.
 UK/South Asian values: chapati≈120kcal,paratha≈220,roti≈120,rice cup≈210,dal≈180,chicken karahi≈350,biryani≈450,samosa≈150,chai with milk≈80. Sum all items. Home-cooked portions.`;
     }
 
